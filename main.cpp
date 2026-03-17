@@ -45,7 +45,7 @@ void mainWindow::paintEvent(QPaintEvent*) {
 			mainPlayer.charaSize*2,
 			mainPlayer.charaSize*2);
 		//蓄力条
-		if (charge > 0 || isCharging) {
+		if (isCharging) {
 			//画灰色背景条
 			QRect chargeBgRect(50, height() - 40, 200, 15);
 			p.setBrush(QColor(80, 80, 80));
@@ -84,6 +84,7 @@ void mainWindow::mousePressEvent(QMouseEvent* event) {
 		isCharging = true;
 		charge = 0.0f;
 	}
+	update();
 }
 
 void mainWindow::mouseReleaseEvent(QMouseEvent* event) {
@@ -94,6 +95,7 @@ void mainWindow::mouseReleaseEvent(QMouseEvent* event) {
 		mainPlayer.isJumping = true;
 		charge = 0.0f;
 	}
+	update();
 }
 
 int main(int argc, char* argv[]) {
