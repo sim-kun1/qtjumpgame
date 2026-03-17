@@ -8,6 +8,7 @@
 #include<QVBoxLayout>
 #include<QMouseEvent>
 #include<QTimer>
+#include<QList>
 
 class mainWindow :public QWidget {
 	Q_OBJECT
@@ -19,7 +20,7 @@ class mainWindow :public QWidget {
 	struct Chara {
 		float posX;
 		float posY;
-		float charaSize = 20;
+		float charaSize=20;
 		float speed;
 		bool direction;
 		bool isJumping = 0;
@@ -61,24 +62,24 @@ public:
 			background-color: #3367d6;
 		}
 		)");
+		//计时器部分初始化
+		gameTimer = new QTimer(this);
+		connect(gameTimer, &QTimer::timeout, this, &mainWindow::updateFrame);
+		gameTimer->setInterval(16);
+		gameTimer->stop();
 		//游戏开始按钮行为
 		QObject::connect(btnStart, &QPushButton::clicked, [this]() {
 			mode = gamemode::Playing;
 			btnStart->hide();
 
-			mainPlayer = { 300,230,20,0,0,0,Qt::red };
-			Box firstBox{ 30,30,300,230,Qt::blue,0 };
+			mainPlayer = { 300,230,20,0,0,0,Qt::red};
+			Box firstBox{30,30,300,230,Qt::blue,0};
 			boxlist.clear();
 			boxlist.append(firstBox);
 
 			gameTimer->start();
 			});
 
-		//计时器部分初始化
-		gameTimer = new QTimer(this);
-		connect(gameTimer, &QTimer::timeout, this, &mainWindow::updateFrame);
-		gameTimer->setInterval(16);
-		gameTimer->stop();
 	}
 protected:
 	void paintEvent(QPaintEvent*) override;

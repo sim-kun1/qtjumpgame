@@ -6,6 +6,7 @@
 #include<QVBoxLayout>
 #include<QMouseEvent>
 #include<QTimer>
+#include<QList>
 #include"mainWindow.h"
 
 void mainWindow::paintEvent(QPaintEvent*) {
@@ -29,20 +30,20 @@ void mainWindow::paintEvent(QPaintEvent*) {
 		p.drawText(rect(), Qt::AlignHCenter | Qt::AlignTop, "JumpGame");
 	}
 	else if (mode == gamemode::Playing) {
-
+		
 		//初始元素绘制
 		for (const Box& box : boxlist) {
 			p.setBrush(box.color);
-			p.drawRect(box.posX - box.width,
-				box.posY - box.height,
-				box.width * 2,
-				box.height * 2);
+			p.drawRect(box.posX-box.width,
+				box.posY-box.height,
+				box.width*2,
+				box.height*2);
 		}
 		p.setBrush(mainPlayer.color);
-		p.drawEllipse(mainPlayer.posX - mainPlayer.charaSize,
+		p.drawEllipse(mainPlayer.posX-mainPlayer.charaSize,
 			mainPlayer.posY - mainPlayer.charaSize,
-			mainPlayer.charaSize * 2,
-			mainPlayer.charaSize * 2);
+			mainPlayer.charaSize*2,
+			mainPlayer.charaSize*2);
 		//蓄力条
 		if (charge > 0 || isCharging) {
 			//画灰色背景条
@@ -68,12 +69,13 @@ void mainWindow::paintEvent(QPaintEvent*) {
 	}
 
 }
-
+//用于更新帧
 void mainWindow::updateFrame() {
 	if (mode != gamemode::Playing) return;
 	if (isCharging && charge < 10.0f) {
 		charge += 0.1f;
 	}
+	update();
 }
 
 void mainWindow::mousePressEvent(QMouseEvent* event) {
