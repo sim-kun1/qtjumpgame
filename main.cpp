@@ -7,6 +7,7 @@
 #include<QMouseEvent>
 #include<QTimer>
 #include<QList>
+#include<QRandomGenerator>
 #include"mainWindow.h"
 
 void mainWindow::paintEvent(QPaintEvent*) {
@@ -44,6 +45,11 @@ void mainWindow::paintEvent(QPaintEvent*) {
 			mainPlayer.posY - mainPlayer.charaSize,
 			mainPlayer.charaSize*2,
 			mainPlayer.charaSize*2);
+		//分数
+		p.setPen(Qt::black); // 文字颜色
+		p.setFont(QFont("Arial", 12));
+		QString scoreText = QString("score：%1").arg(score);
+		p.drawText(10, 30, scoreText);
 		//蓄力条
 		if (isCharging) {
 			//画灰色背景条
@@ -59,7 +65,7 @@ void mainWindow::paintEvent(QPaintEvent*) {
 			p.drawRoundedRect(chargeBarRect, 8, 8);
 
 			//绘制蓄力数值文字
-			p.setPen(Qt::white); // 文字颜色
+			p.setPen(Qt::black); // 文字颜色
 			p.setFont(QFont("Arial", 12));
 			QString chargeText = QString("蓄力：%1/10").arg(charge, 0, 'f', 1);
 			p.drawText(260, height() - 28, chargeText);
@@ -67,17 +73,40 @@ void mainWindow::paintEvent(QPaintEvent*) {
 
 
 	}
+	else if (mode == gamemode::Gameover) {
+		p.setPen(QColor(10, 10, 20));
+		p.setFont(QFont("Arial", 42, QFont::Bold));
+		p.drawText(rect().translated(2, 2), Qt::AlignHCenter | Qt::AlignCenter, "GameOver");
+		p.setPen(QColor(132,124,116));
+		p.drawText(rect(), Qt::AlignHCenter | Qt::AlignCenter, "GameOver");
+		p.setPen(Qt::black);
+		p.setFont(QFont("Arial", 12));
+		QString scoreText = QString("final score：%1").arg(score);
+		p.drawText(rect().translated(0,60), Qt::AlignHCenter | Qt::AlignCenter, scoreText);
+	}
 
 }
 //用于更新帧
 void mainWindow::updateFrame() {
 	if (mode != gamemode::Playing) return;
 	if (isCharging && charge < 10.0f) {
-		charge += 0.1f;
+		charge += 0.15f;
+	}//如果正在蓄力，则增加蓄力进度
+	if (mainPlayer.isJumping == true) {
+		charaJump();
 	}
+	if (boxlist.last().isPassed == true) {
+		boxSpawn();
+	}
+	detectPos();
 	update();
+	moveCamera();
+	if (mainPlayer.isFail == true) {
+		gameOver();
+	}
 }
 
+//鼠标事件实现
 void mainWindow::mousePressEvent(QMouseEvent* event) {
 	if (mode != gamemode::Playing || mainPlayer.isJumping) return;
 	if (event->button() == Qt::LeftButton) {
@@ -86,7 +115,6 @@ void mainWindow::mousePressEvent(QMouseEvent* event) {
 	}
 	update();
 }
-
 void mainWindow::mouseReleaseEvent(QMouseEvent* event) {
 	if (event->button() == Qt::LeftButton && isCharging) {
 		isCharging = false;
@@ -96,6 +124,187 @@ void mainWindow::mouseReleaseEvent(QMouseEvent* event) {
 		charge = 0.0f;
 	}
 	update();
+}
+//角色跳跃
+void mainWindow::charaJump() {
+	if (mainPlayer.direction == 0)//0为x方向
+	{
+		mainPlayer.posX += mainPlayer.speed;
+		mainPlayer.speed -= 0.167;
+		mainPlayer.speed = qMax(0.0f, mainPlayer.speed);
+	}
+	else {
+		mainPlayer.posY -= mainPlayer.speed;
+		mainPlayer.speed -= 0.167;
+		mainPlayer.speed = qMax(0.0f, mainPlayer.speed);
+	}
+}
+//box生成与销毁
+void mainWindow::boxSpawn() {
+	bool direction = (bool)QRandomGenerator::global()->bounded(2);
+	int width = (int)QRandomGenerator::global()->bounded(30,61);
+	int height = (int)QRandomGenerator::global()->bounded(30,61);
+	int colorIndex = (int)QRandomGenerator::global()->bounded(colorList.size());
+	Box newBox = { width,height,mainPlayer.posX,mainPlayer.posY,colorList[colorIndex],false};
+	if (direction == 0) {
+		newBox.posX += QRandomGenerator::global()->bounded(120, 161);
+		mainPlayer.direction = direction;
+		boxlist.append(newBox);
+	}
+	else {
+		newBox.posY -= QRandomGenerator::global()->bounded(120, 161);
+		boxlist.append(newBox);
+		mainPlayer.direction = direction;
+	}
+	if (boxlist.size() >= 3) {
+		boxlist.removeFirst();
+	}
+}
+//碰撞检测
+void mainWindow::detectPos() {
+	if (mainPlayer.isJumping == false) return;
+	if (mainPlayer.speed == 0) {
+		if (mainPlayer.direction == 0) {
+			if (qAbs(boxlist.last().posX - mainPlayer.posX) <= (boxlist.last().width - mainPlayer.charaSize + 5)) {
+				boxlist.last().isPassed = true;
+				mainPlayer.isJumping = false;
+				score++;
+			}
+			else {
+				mainPlayer.isFail = true;
+			}
+		}
+		else {
+			if (qAbs(boxlist.last().posY - mainPlayer.posY) <= (boxlist.last().height - mainPlayer.charaSize + 5)) {
+				boxlist.last().isPassed = true;
+				mainPlayer.isJumping = false;
+				score++;
+			}
+			else {
+				mainPlayer.isFail = true;
+			}
+		}
+	}
+}
+//游戏结束
+void mainWindow::gameOver() {
+	mode = gamemode::Gameover;
+	if (btnreStart == nullptr) {
+		btnreStart = new QPushButton("Restart", this);
+		btnreStart->setFixedSize(140, 80);
+		btnreStart->move(230, 300);
+		btnreStart->setStyleSheet(R"(
+		QPushButton {
+		    background-color: #229453;
+		    color: white;
+		    border-radius: 18px;
+		    font-size: 18px;
+		    font-weight: bold;
+		}
+		QPushButton:hover {
+		    background-color: #40A070;
+		}
+		QPushButton:pressed {
+			background-color: #70887D;
+		}
+		)");
+	}
+	btnreStart->show();
+	QObject::connect(btnreStart, &QPushButton::clicked, [this]() {
+		mode = gamemode::Menu;
+		btnreStart->hide();
+		initGame();
+		});
+}
+//视角移动（数学由AI提供）
+void mainWindow::moveCamera() {
+	if (mode != gamemode::Playing || mainPlayer.isJumping) return;
+	targetDeltaX = mainPlayer.posX - INX;
+	targetDeltaY = mainPlayer.posY - INY;
+	if (qAbs(targetDeltaX) < 1.0f && qAbs(targetDeltaY) < 1.0f) {
+		targetDeltaX = 0;
+		targetDeltaY = 0;
+		return;
+	}
+	float stepX = 0.0f;
+	float stepY = 0.0f;
+
+	// X轴：匀速抵消差值（往左/往右整体移）
+	if (targetDeltaX > 0) {
+		stepX = -qMin(moveSpeed, targetDeltaX); // 整体左移
+	}
+	else if (targetDeltaX < 0) {
+		stepX = qMin(moveSpeed, -targetDeltaX); // 整体右移
+	}
+
+	// Y轴：匀速抵消差值（往上/往下整体移）
+	if (targetDeltaY > 0) {
+		stepY = -qMin(moveSpeed, targetDeltaY); // 整体上移
+	}
+	else if (targetDeltaY < 0) {
+		stepY = qMin(moveSpeed, -targetDeltaY); // 整体下移
+	}
+
+	// 4. 核心：遍历所有元素，整体平移（主角+所有Box）
+	// 主角移动
+	mainPlayer.posX += stepX;
+	mainPlayer.posY += stepY;
+
+	// 所有Box同步移动（整体效果的关键）
+	for (int i = 0; i < boxlist.size(); ++i) {
+		Box& box = boxlist[i];
+		box.posX += stepX;
+		box.posY += stepY;
+	}
+}
+//初始化游戏
+void mainWindow::initGame() {
+	charge = 0.0f;
+	isCharging = false;
+	targetDeltaX = 0.0f;
+	targetDeltaY = 0.0f;
+	mainPlayer.isFail = false;
+	score = 0;
+	//创建控件
+	if (btnStart == nullptr) {
+		btnStart = new QPushButton("Start", this);
+		btnStart->setFixedSize(180, 80);
+		btnStart->move(210, 300);
+		btnStart->setStyleSheet(R"(
+		QPushButton {
+		    background-color: #4285F4;
+		    color: white;
+		    border-radius: 18px;
+		    font-size: 18px;
+		    font-weight: bold;
+		}
+		QPushButton:hover {
+		    background-color: #5a95f5;
+		}
+		QPushButton:pressed {
+			background-color: #3367d6;
+		}
+		)");
+	}
+	//计时器部分初始化
+	if (gameTimer == nullptr) {
+		gameTimer = new QTimer(this);
+		connect(gameTimer, &QTimer::timeout, this, &mainWindow::updateFrame);
+		gameTimer->setInterval(16);
+	}
+	//游戏开始按钮行为
+	btnStart->show();
+	QObject::connect(btnStart, &QPushButton::clicked, [this]() {
+		mode = gamemode::Playing;
+		btnStart->hide();
+
+		mainPlayer = { 300,230,20,0,0,0,Qt::red };
+		Box firstBox{ 30,30,300,230,Qt::blue,1 };
+		boxlist.clear();
+		boxlist.append(firstBox);
+		if (gameTimer->isActive()) gameTimer->stop();
+		gameTimer->start();
+		});
 }
 
 int main(int argc, char* argv[]) {

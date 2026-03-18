@@ -10,6 +10,9 @@
 #include<QTimer>
 #include<QList>
 
+constexpr auto INX = 300;
+constexpr auto INY = 230;
+
 class mainWindow :public QWidget {
 	Q_OBJECT
 		enum class gamemode {
@@ -43,58 +46,41 @@ public:
 		this->resize(600, 400);
 		this->setFocusPolicy(Qt::StrongFocus);
 		mode = gamemode::Menu;
-		//创建控件
-		btnStart = new QPushButton("Start", this);
-		btnStart->setFixedSize(180, 80);
-		btnStart->move(210, 300);
-		btnStart->setStyleSheet(R"(
-		QPushButton {
-		    background-color: #4285F4;
-		    color: white;
-		    border-radius: 18px;
-		    font-size: 18px;
-		    font-weight: bold;
-		}
-		QPushButton:hover {
-		    background-color: #5a95f5;
-		}
-		QPushButton:pressed {
-			background-color: #3367d6;
-		}
-		)");
-		//计时器部分初始化
-		gameTimer = new QTimer(this);
-		connect(gameTimer, &QTimer::timeout, this, &mainWindow::updateFrame);
-		gameTimer->setInterval(16);
-		gameTimer->stop();
-		//游戏开始按钮行为
-		QObject::connect(btnStart, &QPushButton::clicked, [this]() {
-			mode = gamemode::Playing;
-			btnStart->hide();
-
-			mainPlayer = { 300,230,20,0,0,0,Qt::red};
-			Box firstBox{30,30,300,230,Qt::blue,0};
-			boxlist.clear();
-			boxlist.append(firstBox);
-
-			gameTimer->start();
-			});
+		initGame();
 
 	}
 protected:
-	void paintEvent(QPaintEvent*) override;
+	void paintEvent(QPaintEvent*) override;//绘制
 	void mousePressEvent(QMouseEvent* event) override;
-	void mouseReleaseEvent(QMouseEvent* event) override;
+	void mouseReleaseEvent(QMouseEvent* event) override;//鼠标状态监控
+	void charaJump();//主角移动
+	void boxSpawn();;//盒子生成
+	void detectPos();//检测位置
+	void gameOver();//游戏结束
+	void initGame();
+	void moveCamera();
 private slots:
-	void updateFrame();
+	void updateFrame();//计时器核心
 private:
 	gamemode mode = gamemode::Menu;
 	QPushButton* btnStart = nullptr;
+	QPushButton* btnreStart = nullptr;
 	QList<Box> boxlist;
 	Chara mainPlayer{ 300,230,20,0,0,0 };
 	QTimer* gameTimer;
+	QList<QColor> colorList = {
+		Qt::green,
+		Qt::yellow,
+		Qt::blue,
+		Qt::black,
+		Qt::white
+	};
+	float moveSpeed = 8.0f;    // 整体移动速度（可调，越大越快）
+	float targetDeltaX = 0.0f; // 需抵消的X差值（主角→屏幕中心）
+	float targetDeltaY = 0.0f; // 需抵消的Y差值
 	float charge = 0.0f;
 	bool isCharging = false;
+	int score=0;
 };
 
 #endif
