@@ -8,6 +8,10 @@
 #include<QTimer>
 #include<QList>
 #include<QRandomGenerator>
+#include<QFile>
+#include<QTextStream>
+#include<QFileDialog>
+#include<QDebug>
 #include"mainWindow.h"
 
 void mainWindow::paintEvent(QPaintEvent*) {
@@ -29,6 +33,9 @@ void mainWindow::paintEvent(QPaintEvent*) {
 		p.drawText(rect().translated(2, 2), Qt::AlignHCenter | Qt::AlignTop, "JumpGame");
 		p.setPen(QColor(102, 193, 140));
 		p.drawText(rect(), Qt::AlignHCenter | Qt::AlignTop, "JumpGame");
+		p.setPen(QColor(252,210,23));
+		p.setFont(QFont("Arial", 16, QFont::Bold));
+		p.drawText(rect().translated(0,10), Qt::AlignLeft | Qt::AlignTop, QString("最高记录：%1").arg(HScore));
 	}
 	else if (mode == gamemode::Playing) {
 		
@@ -189,6 +196,7 @@ void mainWindow::detectPos() {
 //游戏结束
 void mainWindow::gameOver() {
 	mode = gamemode::Gameover;
+	saveScore();
 	if (btnreStart == nullptr) {
 		btnreStart = new QPushButton("Restart", this);
 		btnreStart->setFixedSize(140, 80);
@@ -286,6 +294,26 @@ void mainWindow::initGame() {
 		}
 		)");
 	}
+	if (btnreScore == nullptr) {
+		btnreScore = new QPushButton("重置记录", this);
+		btnreScore->setFixedSize(80, 20);
+		btnreScore->move(15, 40);
+		btnreScore->setStyleSheet(R"(
+		QPushButton {
+		    background-color: #FA7E23;
+		    color: white;
+		    border-radius: 20px;
+		    font-size: 14px;
+		    font-weight: bold;
+		}
+		QPushButton:hover {
+		    background-color: #F97D1C;
+		}
+		QPushButton:pressed {
+			background-color: #F1441D;
+		}
+		)");
+	}
 	//计时器部分初始化
 	if (gameTimer == nullptr) {
 		gameTimer = new QTimer(this);
@@ -297,7 +325,7 @@ void mainWindow::initGame() {
 	QObject::connect(btnStart, &QPushButton::clicked, [this]() {
 		mode = gamemode::Playing;
 		btnStart->hide();
-
+		btnreScore->hide();
 		mainPlayer = { 300,230,20,0,0,0,Qt::red };
 		Box firstBox{ 30,30,300,230,Qt::blue,1 };
 		boxlist.clear();
@@ -305,6 +333,67 @@ void mainWindow::initGame() {
 		if (gameTimer->isActive()) gameTimer->stop();
 		gameTimer->start();
 		});
+	//重置按钮
+	btnreScore->show();
+	QObject::connect(btnreScore, &QPushButton::clicked, [this]() {
+		QString filepath = QCoreApplication::applicationDirPath() + "/score.txt";
+		QFile file(filepath);
+		if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+			qDebug() << "重置分数失败：" << file.errorString();
+			return;
+		}
+		QTextStream out(&file);
+		out << "0";
+		HScore = 0;
+		out.flush();
+		file.close();
+		update();
+		});
+	HScore = highScore();
+}
+//文件处理
+int mainWindow::highScore() {//负责创建文件和读取最高分
+	QString filePath = QCoreApplication::applicationDirPath() + "/score.txt";
+	QFile file(filePath);
+	if (!file.open(QIODevice::ReadWrite | QIODevice::Text | QIODevice::Append)) {
+		qDebug() << "最高分文件打开失败：" << file.errorString();
+		return 0; // 打开失败时返回默认最高分0
+	}
+	int highScore = 0;
+	if (file.size() == 0) {
+		QTextStream out(&file);
+		out << "0";
+		out.flush();
+		highScore = 0;
+	}
+	else {
+		file.seek(0);
+		QTextStream in(&file);
+		QString scoreStr = in.readLine().trimmed();
+		bool ok;
+		highScore = scoreStr.toInt(&ok);
+		if (!ok) {
+			file.resize(0);
+			QTextStream out(&file);
+			out << "0";
+			out.flush();
+			highScore = 0;
+		}
+	}
+	file.close();
+	return highScore;
+}
+void mainWindow::saveScore() {//负最高分责保存
+	QString filepath = QCoreApplication::applicationDirPath() + "/score.txt";
+	QFile file(filepath);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+		qDebug() << "写入最高分失败：" << file.errorString();
+		return;
+	}
+	QTextStream out(&file);
+	out << QString::number(qMax(score, HScore));
+	out.flush();
+	file.close();
 }
 
 int main(int argc, char* argv[]) {

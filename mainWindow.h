@@ -9,6 +9,9 @@
 #include<QMouseEvent>
 #include<QTimer>
 #include<QList>
+#include<QFile>
+#include<QTextStream>
+#include<QFileDialog>
 
 constexpr auto INX = 300;
 constexpr auto INY = 230;
@@ -45,6 +48,9 @@ public:
 		this->setWindowTitle("JumpGame");
 		this->resize(600, 400);
 		this->setFocusPolicy(Qt::StrongFocus);
+
+		
+
 		mode = gamemode::Menu;
 		initGame();
 
@@ -59,12 +65,15 @@ protected:
 	void gameOver();//游戏结束
 	void initGame();
 	void moveCamera();
+	int highScore();
+	void saveScore();
 private slots:
 	void updateFrame();//计时器核心
 private:
 	gamemode mode = gamemode::Menu;
 	QPushButton* btnStart = nullptr;
 	QPushButton* btnreStart = nullptr;
+	QPushButton* btnreScore = nullptr;
 	QList<Box> boxlist;
 	Chara mainPlayer{ 300,230,20,0,0,0 };
 	QTimer* gameTimer;
@@ -81,6 +90,7 @@ private:
 	float charge = 0.0f;
 	bool isCharging = false;
 	int score=0;
+	int HScore = 0;
 };
 
 #endif
