@@ -14,6 +14,7 @@
 #include<QDebug>
 #include"mainWindow.h"
 
+//主绘制函数
 void mainWindow::paintEvent(QPaintEvent*) {
 
 	//绘制主页面
@@ -93,6 +94,7 @@ void mainWindow::paintEvent(QPaintEvent*) {
 	}
 
 }
+
 //用于更新帧
 void mainWindow::updateFrame() {
 	if (mode != gamemode::Playing) return;
@@ -149,21 +151,26 @@ void mainWindow::charaJump() {
 //box生成与销毁
 void mainWindow::boxSpawn() {
 	bool direction = (bool)QRandomGenerator::global()->bounded(2);
-	int width = (int)QRandomGenerator::global()->bounded(30,61);
-	int height = (int)QRandomGenerator::global()->bounded(30,61);
+	int minSize = 0;
+	int minDistance = 180 - (20 + 20*multiply);
+	if (multiply == 1) minSize = 50;
+	else if (multiply == 2) minSize = 35;
+	else minSize = 25;
+	int width = (int)QRandomGenerator::global()->bounded(minSize,minSize+21);
+	int height = (int)QRandomGenerator::global()->bounded(minSize, minSize + 21);
 	int colorIndex = (int)QRandomGenerator::global()->bounded(colorList.size());
 	Box newBox = { width,height,mainPlayer.posX,mainPlayer.posY,colorList[colorIndex],false};
 	if (direction == 0) {
-		newBox.posX += QRandomGenerator::global()->bounded(120, 161);
+		newBox.posX += QRandomGenerator::global()->bounded(minDistance, 181);
 		mainPlayer.direction = direction;
 		boxlist.append(newBox);
 	}
 	else {
-		newBox.posY -= QRandomGenerator::global()->bounded(120, 161);
+		newBox.posY -= QRandomGenerator::global()->bounded(minDistance, 181);
 		boxlist.append(newBox);
 		mainPlayer.direction = direction;
 	}
-	if (boxlist.size() >= 3) {
+	if (boxlist.size() >= 5) {
 		boxlist.removeFirst();
 	}
 }
@@ -172,20 +179,20 @@ void mainWindow::detectPos() {
 	if (mainPlayer.isJumping == false) return;
 	if (mainPlayer.speed == 0) {
 		if (mainPlayer.direction == 0) {
-			if (qAbs(boxlist.last().posX - mainPlayer.posX) <= (boxlist.last().width - mainPlayer.charaSize + 5)) {
+			if (qAbs(boxlist.last().posX - mainPlayer.posX) <= (boxlist.last().width - mainPlayer.charaSize + 4*(3-multiply))) {
 				boxlist.last().isPassed = true;
 				mainPlayer.isJumping = false;
-				score++;
+				score += multiply;
 			}
 			else {
 				mainPlayer.isFail = true;
 			}
 		}
 		else {
-			if (qAbs(boxlist.last().posY - mainPlayer.posY) <= (boxlist.last().height - mainPlayer.charaSize + 5)) {
+			if (qAbs(boxlist.last().posY - mainPlayer.posY) <= (boxlist.last().height - mainPlayer.charaSize + 4*(3-multiply))) {
 				boxlist.last().isPassed = true;
 				mainPlayer.isJumping = false;
-				score++;
+				score += multiply;
 			}
 			else {
 				mainPlayer.isFail = true;
@@ -272,8 +279,9 @@ void mainWindow::initGame() {
 	targetDeltaX = 0.0f;
 	targetDeltaY = 0.0f;
 	mainPlayer.isFail = false;
-	score = 0;
+	score = 0;//参数初始化
 	//创建控件
+	//start button
 	if (btnStart == nullptr) {
 		btnStart = new QPushButton("Start", this);
 		btnStart->setFixedSize(180, 80);
@@ -294,6 +302,7 @@ void mainWindow::initGame() {
 		}
 		)");
 	}
+	//restart game
 	if (btnreScore == nullptr) {
 		btnreScore = new QPushButton("重置记录", this);
 		btnreScore->setFixedSize(80, 20);
@@ -314,19 +323,76 @@ void mainWindow::initGame() {
 		}
 		)");
 	}
+	//用于展示文字，无作用
+	if (btnDifficuty == nullptr) {
+		btnDifficuty = new QPushButton("选择难度", this);
+		btnDifficuty->setFixedSize(100, 35);
+		btnDifficuty->move(15, 80);
+		btnDifficuty->setStyleSheet(R"(
+		QPushButton {
+		    background-color: #986524;
+		    color: white;
+		    border-radius: 20px;
+		    font-size: 14px;
+		    font-weight: bold;
+		}
+		QPushButton:hover {
+		    background-color: #986524;
+		}
+		QPushButton:pressed {
+			background-color: #986524;
+		}
+		)");
+	}
+	if (btnDiffEasy == nullptr) {
+		btnDiffEasy = new QPushButton("Easy(x1)", this);
+		btnDiffEasy->setFixedSize(80, 30);
+		btnDiffEasy->move(15, 130);
+		btnDiffEasy->setStyleSheet("background-color:gray;color:white;");
+	}
+	if (btnDiffNormal == nullptr) {
+		btnDiffNormal = new QPushButton("Normal(x2)", this);
+		btnDiffNormal->setFixedSize(80, 30);
+		btnDiffNormal->move(15, 170);
+		btnDiffNormal->setStyleSheet("background-color:gray;color:white;");
+	}	
+	if (btnDiffHard == nullptr) {
+		btnDiffHard = new QPushButton("Easy(x3)", this);
+		btnDiffHard->setFixedSize(80, 30);
+		btnDiffHard->move(15, 210);
+		btnDiffHard->setStyleSheet("background-color:gray;color:white;");
+	}
+	updataButton();
 	//计时器部分初始化
 	if (gameTimer == nullptr) {
 		gameTimer = new QTimer(this);
 		connect(gameTimer, &QTimer::timeout, this, &mainWindow::updateFrame);
 		gameTimer->setInterval(16);
 	}
+	//难度按钮调整
+	QObject::connect(btnDiffEasy, &QPushButton::clicked, [this]() {
+		diff = difficuty::Easy;
+		updataButton();
+		});
+	QObject::connect(btnDiffNormal, &QPushButton::clicked, [this]() {
+		diff = difficuty::Normal;
+		updataButton();
+		});
+	QObject::connect(btnDiffHard, &QPushButton::clicked, [this]() {
+		diff = difficuty::Hard;
+		updataButton();
+		});
 	//游戏开始按钮行为
 	btnStart->show();
 	QObject::connect(btnStart, &QPushButton::clicked, [this]() {
 		mode = gamemode::Playing;
 		btnStart->hide();
 		btnreScore->hide();
-		mainPlayer = { 300,230,20,0,0,0,Qt::red };
+		btnDifficuty->hide();
+		btnDiffEasy->hide();
+		btnDiffNormal->hide();
+		btnDiffHard->hide();
+		mainPlayer = { 300,230,15,0,0,0,Qt::red };
 		Box firstBox{ 30,30,300,230,Qt::blue,1 };
 		boxlist.clear();
 		boxlist.append(firstBox);
@@ -394,6 +460,28 @@ void mainWindow::saveScore() {//负最高分责保存
 	out << QString::number(qMax(score, HScore));
 	out.flush();
 	file.close();
+}
+//更改难度后更新数据
+void mainWindow::updataButton() {
+	btnDiffEasy->setStyleSheet("background-color:gray;color:white;");
+	btnDiffNormal->setStyleSheet("background-color:gray;color:white;");
+	btnDiffHard->setStyleSheet("background-color:gray;color:white;");
+	btnDifficuty->show();
+	btnDiffEasy->show();
+	btnDiffNormal->show();
+	btnDiffHard->show();
+	if (diff == difficuty::Easy) {
+		btnDiffEasy->setStyleSheet("background-color:green;color:black;");
+		multiply = 1;
+	}
+	if (diff == difficuty::Normal) {
+		btnDiffNormal->setStyleSheet("background-color:yellow;color:black;");
+		multiply = 2;
+	}
+	if (diff == difficuty::Hard) {
+		btnDiffHard->setStyleSheet("background-color:red;color:black;");
+		multiply = 3;
+	}
 }
 
 int main(int argc, char* argv[]) {
