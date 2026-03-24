@@ -357,7 +357,7 @@ void mainWindow::initGame() {
 		btnDiffNormal->setStyleSheet("background-color:gray;color:white;");
 	}	
 	if (btnDiffHard == nullptr) {
-		btnDiffHard = new QPushButton("Easy(x3)", this);
+		btnDiffHard = new QPushButton("Hard(x3)", this);
 		btnDiffHard->setFixedSize(80, 30);
 		btnDiffHard->move(15, 210);
 		btnDiffHard->setStyleSheet("background-color:gray;color:white;");
