@@ -12,6 +12,10 @@
 #include<QTextStream>
 #include<QFileDialog>
 #include<QDebug>
+#include<QTcpServer>
+#include<QTcpSocket>
+#include<QHostAddress>
+#include<QInputDialog>
 #include"mainWindow.h"
 
 //主绘制函数
@@ -29,17 +33,40 @@ void mainWindow::paintEvent(QPaintEvent*) {
 		p.drawRect(470, 60, 60, 80);
 		p.setBrush(Qt::white);
 		p.drawEllipse(280, 210, 40, 40);
+
 		p.setPen(QColor(10, 10, 20));
 		p.setFont(QFont("Arial", 42, QFont::Bold));
 		p.drawText(rect().translated(2, 2), Qt::AlignHCenter | Qt::AlignTop, "JumpGame");
 		p.setPen(QColor(102, 193, 140));
 		p.drawText(rect(), Qt::AlignHCenter | Qt::AlignTop, "JumpGame");
+
 		p.setPen(QColor(252,210,23));
 		p.setFont(QFont("Arial", 16, QFont::Bold));
 		p.drawText(rect().translated(0,10), Qt::AlignLeft | Qt::AlignTop, QString("最高记录：%1").arg(HScore));
+		if (isHost && socket == nullptr) {
+			p.setPen(QColor(252, 210, 210));
+			p.setFont(QFont("Arial", 16, QFont::Bold));
+			p.drawText(rect(), Qt::AlignLeft | Qt::AlignBottom, QString("等待连接"));
+		}
+		else if (isHost && socket != nullptr) {
+			p.setPen(QColor(252, 210, 210));
+			p.setFont(QFont("Arial", 16, QFont::Bold));
+			p.drawText(rect(), Qt::AlignLeft | Qt::AlignBottom, QString("连接成功"));
+			btnStart->show();
+			
+		}
 	}
 	else if (mode == gamemode::Playing) {
-		
+		if (isClient) {
+			for (const Box& box : remoteBoxList) {
+				p.setBrush(Qt::cyan);
+				p.drawRect(box.posX - box.width, box.posY - box.height, box.width * 2, box.height * 2);
+			}
+			p.setBrush(Qt::blue);
+			p.drawEllipse(remotePlayer.posX - 15, remotePlayer.posY - 15, 30, 30);
+			p.drawText(10, 30, "房主分数：" + QString::number(remoteScore));
+			return;
+		}
 		//初始元素绘制
 		for (const Box& box : boxlist) {
 			p.setBrush(box.color);
@@ -97,6 +124,7 @@ void mainWindow::paintEvent(QPaintEvent*) {
 
 //用于更新帧
 void mainWindow::updateFrame() {
+	if (isClient) return; // 客户端不跑本地游戏逻辑
 	if (mode != gamemode::Playing) return;
 	if (isCharging && charge < 10.0f) {
 		charge += 0.15f;
@@ -112,6 +140,9 @@ void mainWindow::updateFrame() {
 	moveCamera();
 	if (mainPlayer.isFail == true) {
 		gameOver();
+	}
+	if (isHost && socket != nullptr && socket->state() == QAbstractSocket::ConnectedState) {
+		sendNetworkData();
 	}
 }
 
@@ -227,6 +258,9 @@ void mainWindow::gameOver() {
 	btnreStart->show();
 	QObject::connect(btnreStart, &QPushButton::clicked, [this]() {
 		mode = gamemode::Menu;
+		isHost = false;
+		isClient = false;
+		stopNetwork();
 		btnreStart->hide();
 		initGame();
 		});
@@ -274,6 +308,9 @@ void mainWindow::moveCamera() {
 }
 //初始化游戏
 void mainWindow::initGame() {
+	if (server || socket) {
+		stopNetwork();
+	}
 	charge = 0.0f;
 	isCharging = false;
 	targetDeltaX = 0.0f;
@@ -327,7 +364,7 @@ void mainWindow::initGame() {
 	if (btnDifficuty == nullptr) {
 		btnDifficuty = new QPushButton("选择难度", this);
 		btnDifficuty->setFixedSize(100, 35);
-		btnDifficuty->move(15, 80);
+		btnDifficuty->move(10, 80);
 		btnDifficuty->setStyleSheet(R"(
 		QPushButton {
 		    background-color: #986524;
@@ -363,6 +400,29 @@ void mainWindow::initGame() {
 		btnDiffHard->setStyleSheet("background-color:gray;color:white;");
 	}
 	updataButton();
+
+	if (btnHost == nullptr) {//联机按钮
+		btnHost = new QPushButton("创建房间", this);
+		btnHost->setFixedSize(90, 40);
+		btnHost->move(10, 300);
+		btnHost->setStyleSheet("background-color:blue;color:white;");
+		btnHost->show();
+	}
+	
+	if (btnJoin == nullptr) {//联机按钮，
+		btnJoin = new QPushButton("加入房间", this);
+		btnJoin->setFixedSize(90, 40);
+		btnJoin->move(10, 350);
+		btnJoin->setStyleSheet("background-color:green;color:white;");
+		btnJoin->show();
+	}
+	if (btnLeftgame == nullptr) {//断连按钮，
+		btnLeftgame = new QPushButton("取消连接", this);
+		btnLeftgame->setFixedSize(90, 40);
+		btnLeftgame->move(10, 350);
+		btnLeftgame->setStyleSheet("background-color:green;color:white;");
+		btnLeftgame->hide();
+	}
 	//计时器部分初始化
 	if (gameTimer == nullptr) {
 		gameTimer = new QTimer(this);
@@ -382,6 +442,13 @@ void mainWindow::initGame() {
 		diff = difficuty::Hard;
 		updataButton();
 		});
+	//断开连接
+	QObject::connect(btnLeftgame, &QPushButton::clicked, [this]() {
+		stopNetwork();
+		initGame();
+		isHost = false;
+		isClient = false;
+	});
 	//游戏开始按钮行为
 	btnStart->show();
 	QObject::connect(btnStart, &QPushButton::clicked, [this]() {
@@ -415,6 +482,54 @@ void mainWindow::initGame() {
 		file.close();
 		update();
 		});
+	QObject::connect(btnHost, &QPushButton::clicked, [this]() {
+		//创建房间逻辑
+		isHost = true;
+		isClient = false;
+
+		server = new QTcpServer(this);
+		if (!server->listen(QHostAddress::Any, 12345)) {
+			qDebug() << "服务器启动失败：" << server->errorString();
+			return;
+		}
+		QObject::connect(server, &QTcpServer::newConnection, [this]() {
+			socket = server->nextPendingConnection();
+			connect(socket, &QTcpSocket::readyRead, this, &mainWindow::readNetworkData);
+			});
+		btnHost->hide();
+		btnJoin->hide();
+		btnStart->hide();
+		btnLeftgame->show();
+		});
+	QObject::connect(btnJoin, &QPushButton::clicked, [this]() {
+		isClient = true;
+		isHost = false;
+		bool ok = false;
+		QString ip = QInputDialog::getText(
+			this,
+			"加入房间",
+			"输入ip地址",
+			QLineEdit::Normal,
+			"192.168.1.100",
+			&ok
+		);
+		if (!ok || ip.isEmpty()) {
+			return;
+		}
+		socket = new QTcpSocket(this);
+		connect(socket,&QTcpSocket::errorOccurred, [this](QAbstractSocket::SocketError socketError) {
+			qDebug() << "连接错误：" << socketError;
+			socket->deleteLater();
+			socket = nullptr;
+			});
+		socket->connectToHost(ip, 12345);
+		connect(socket, &QTcpSocket::readyRead, this , &mainWindow::readNetworkData);
+		btnHost->hide();
+		btnJoin->hide();
+		btnLeftgame->show();
+		});
+
+
 	HScore = highScore();
 }
 //文件处理
@@ -482,6 +597,77 @@ void mainWindow::updataButton() {
 		btnDiffHard->setStyleSheet("background-color:red;color:black;");
 		multiply = 3;
 	}
+}
+//编码发送和接受解读数据
+void mainWindow::readNetworkData() {
+	QByteArray ba = socket->readAll();
+	QStringList lines = QString(ba).split("\n");
+
+	for (QString line : lines) {
+		if (line.startsWith("POS:")) {
+			QStringList pos = line.mid(4).split(",");
+			remotePlayer.posX = pos[0].toFloat();
+			remotePlayer.posY = pos[1].toFloat();
+		}
+		else if (line.startsWith("SCORE:")) {
+			remoteScore = line.mid(6).toInt();
+		}
+		else if (line.startsWith("CHARGE:")) {
+			remoteCharge = line.mid(7).toFloat();
+		}
+		else if (line.startsWith("CHARGING:")) {
+			remoteIsCharging = line.mid(9).toInt();
+		}
+		else if (line.startsWith("BOX:")) {
+			remoteBoxList.clear();
+			QStringList boxStrs = line.mid(4).split(";");
+			for (QString bStr : boxStrs) {
+				if (bStr.isEmpty()) continue;
+				QStringList vals = bStr.split(",");
+				if (vals.size() < 4) continue;
+
+				Box b;
+				b.posX = vals[0].toFloat();
+				b.posY = vals[1].toFloat();
+				b.width = vals[2].toFloat();
+				b.height = vals[3].toFloat();
+				remoteBoxList.append(b);
+			}
+		}
+	}
+	update();
+}
+void mainWindow::sendNetworkData() {
+	if (!socket) return;
+	QString data;
+	data += "POS:" + QString::number(mainPlayer.posX) + "," + QString::number(mainPlayer.posY) + "\n";
+	data += "SCORE:" + QString::number(score) + "\n";
+	data += "CHARGE:" + QString::number(charge) + "\n";
+	data += "CHARGING:" + QString::number(isCharging) + "\n";
+	QString boxStr = "BOX:";
+	for (const Box& b : boxlist) {
+		boxStr += QString::number(b.posX) + "," + QString::number(b.posY) + "," +
+			QString::number(b.width) + "," + QString::number(b.height) + ";";
+	}
+	data += boxStr + "\n";
+	socket->write(data.toUtf8());
+}
+
+void mainWindow::stopNetwork()//断开连接
+{
+	if (socket) {
+		socket->disconnectFromHost();
+		socket->deleteLater();
+		socket = nullptr;
+	}
+	if (server) {
+		server->close();
+		server->deleteLater();
+		server = nullptr;
+	}
+	isHost = false;
+	isClient = false;
+	btnLeftgame->hide();
 }
 
 int main(int argc, char* argv[]) {

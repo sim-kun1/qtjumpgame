@@ -12,6 +12,9 @@
 #include<QFile>
 #include<QTextStream>
 #include<QFileDialog>
+#include<QTcpServer>
+#include<QTcpSocket>
+#include<QHostAddress>
 
 constexpr auto INX = 300;
 constexpr auto INY = 230;
@@ -71,8 +74,11 @@ protected:
 	int highScore();//获取最高分
 	void saveScore();//保存最高分
 	void updataButton();
+	void stopNetwork();
 private slots:
 	void updateFrame();//计时器核心
+	void readNetworkData();
+	void sendNetworkData();//联机数据收发
 private:
 	gamemode mode = gamemode::Menu;
 	difficuty diff = difficuty::Easy;//枚举值初始化
@@ -84,6 +90,9 @@ private:
 	QPushButton* btnDiffEasy = nullptr;
 	QPushButton* btnDiffNormal = nullptr;
 	QPushButton* btnDiffHard = nullptr;//各种按钮初始化
+	QPushButton* btnHost = nullptr;
+	QPushButton* btnJoin = nullptr;
+	QPushButton* btnLeftgame = nullptr;
 
 	QList<Box> boxlist;
 	Chara mainPlayer{ 300,230,20,0,0,0 };
@@ -103,6 +112,18 @@ private:
 	int score=0;
 	int HScore = 0;
 	int multiply = 1;
+
+	// 联机
+	QTcpServer* server = nullptr;
+	QTcpSocket* socket = nullptr;
+	bool isHost = false;
+	bool isClient = false;
+
+	Chara remotePlayer;
+	QList<Box> remoteBoxList;
+	int remoteScore = 0;
+	float remoteCharge = 0;
+	bool remoteIsCharging = false;
 };
 
 #endif
